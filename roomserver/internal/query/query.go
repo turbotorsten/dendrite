@@ -32,6 +32,7 @@ import (
 	"github.com/matrix-org/dendrite/syncapi/synctypes"
 
 	"github.com/matrix-org/dendrite/clientapi/auth/authtypes"
+	fsAPI "github.com/matrix-org/dendrite/federationapi/api"
 	"github.com/matrix-org/dendrite/internal/caching"
 	"github.com/matrix-org/dendrite/roomserver/acls"
 	"github.com/matrix-org/dendrite/roomserver/api"
@@ -47,6 +48,7 @@ type Queryer struct {
 	IsLocalServerName func(spec.ServerName) bool
 	ServerACLs        *acls.ServerACLs
 	Cfg               *config.Dendrite
+	FSAPI             fsAPI.RoomserverFederationAPI
 }
 
 func (r *Queryer) RestrictedRoomJoinInfo(ctx context.Context, roomID spec.RoomID, senderID spec.SenderID, localServerName spec.ServerName) (*gomatrixserverlib.RestrictedRoomJoinInfo, error) {
@@ -972,6 +974,20 @@ func (r *Queryer) LocallyJoinedUsers(ctx context.Context, roomVersion gomatrixse
 	}
 
 	return joinedUsers, nil
+}
+
+func (r *Queryer) JoinedUserCount(ctx context.Context, roomID string) (int, error) {
+	info, err := r.DB.RoomInfo(ctx, roomID)
+	if err != nil {
+		return 0, err
+	}
+	if info == nil {
+		return 0, nil
+	}
+
+	// TODO: this can be further optimised by just using a SELECT COUNT query
+	nids, err := r.DB.GetMembershipEventNIDsForRoom(ctx, info.RoomNID, true, false)
+	return len(nids), err
 }
 
 // nolint:gocyclo
